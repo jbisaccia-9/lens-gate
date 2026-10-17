@@ -1,0 +1,79 @@
+# The static dashboards `provision` builds — the "before" picture that the
+# chat panel and Claude then extend. SQL is written once and runs unchanged on
+# Postgres (live stack) and SQLite (offline gate), so it sticks to the common
+# subset: text dates, no date functions, ROUND on aggregates.
+
+dashboards:
+  - name: Store Floor
+    collection: Store Floor
+    cards:
+      - name: Weekly revenue by store
+        connection: wh_sales
+        display: line
+        sql: |
+          SELECT w.week_start, st.store_name, ROUND(SUM(w.revenue), 2) AS revenue
+          FROM sales.weekly_sales w JOIN ref.stores st ON st.store_id = w.store_id
+          GROUP BY w.week_start, st.store_name ORDER BY w.week_start, st.store_name
+      - name: Category mix, last 4 weeks
+        connection: wh_sales
+        display: pie
+        sql: |
+          SELECT w.category, ROUND(SUM(w.revenue), 2) AS revenue
+          FROM sales.weekly_sales w WHERE w.week_start >= '2026-09-14'
+          GROUP BY w.category ORDER BY revenue DESC
+      - name: Stockout days by store, last 4 weeks
+        connection: wh_ops
+        display: bar
+        sql: |
+          SELECT st.store_name, SUM(i.stockout_days) AS stockout_days
+          FROM ops.inventory_weekly i JOIN ref.stores st ON st.store_id = i.store_id
+          WHERE i.week_start >= '2026-09-14'
+          GROUP BY st.store_name ORDER BY stockout_days DESC
+
+  - name: Regional Ops
+    collection: Regional Ops
+    cards:
+      - name: Scheduled vs worked hours by region
+        connection: wh_people
+        display: bar
+        sql: |
+          SELECT st.region, SUM(h.scheduled_hours) AS scheduled_hours, SUM(h.worked_hours) AS worked_hours
+          FROM people.staff_hours_weekly h JOIN ref.stores st ON st.store_id = h.store_id
+          GROUP BY st.region ORDER BY st.region
+      - name: Revenue per labor hour by store
+        connection: wh_exec
+        display: table
+        sql: |
+          SELECT st.store_name, ROUND(r.revenue / h.hours, 2) AS revenue_per_labor_hour
+          FROM ref.stores st
+          JOIN (SELECT store_id, SUM(revenue) AS revenue FROM sales.weekly_sales GROUP BY store_id) r ON r.store_id = st.store_id
+          JOIN (SELECT store_id, SUM(worked_hours) AS hours FROM people.staff_hours_weekly GROUP BY store_id) h ON h.store_id = st.store_id
+          ORDER BY revenue_per_labor_hour DESC
+
+  - name: Finance Monthly
+    collection: Finance
+    cards:
+      - name: Operating income by month
+        connection: wh_finance
+        display: bar
+        sql: |
+          SELECT p.month, ROUND(SUM(p.operating_income), 2) AS operating_income
+          FROM finance.store_pnl_monthly p GROUP BY p.month ORDER BY p.month
+      - name: Cost structure by month
+        connection: wh_finance
+        display: table
+        sql: |
+          SELECT p.month, ROUND(SUM(p.cogs), 2) AS cogs, ROUND(SUM(p.labor_cost), 2) AS labor_cost,
+                 ROUND(SUM(p.occupancy), 2) AS occupancy, ROUND(SUM(p.other_opex), 2) AS other_opex
+          FROM finance.store_pnl_monthly p GROUP BY p.month ORDER BY p.month
+
+  - name: Executive Overview
+    collection: Executive
+    cards:
+      - name: Revenue and operating income by region
+        connection: wh_exec
+        display: bar
+        sql: |
+          SELECT st.region, ROUND(SUM(p.revenue), 2) AS revenue, ROUND(SUM(p.operating_income), 2) AS operating_income
+          FROM finance.store_pnl_monthly p JOIN ref.stores st ON st.store_id = p.store_id
+          GROUP BY st.region ORDER BY revenue DESC

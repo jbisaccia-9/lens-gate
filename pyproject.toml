@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lens-gate"
+version = "0.1.0"
+description = "AI on the BI layer, gated by the asking person's own permissions - Metabase + Claude/Foundry, where no answer is shown unless that person could have run every query and edit by hand, and every number traces to a result"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Joseph Bisaccia"}]
+requires-python = ">=3.10"
+keywords = ["gate", "ci", "metabase", "mcp", "rbac", "entra-id", "analytics", "llm-agents", "permissions"]
+dependencies = ["pyyaml", "pyjwt", "cryptography"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+live = ["anthropic", "openai"]
+mcp = ["mcp"]
+
+[project.urls]
+Homepage = "https://getaiintegrations.com/projects"
+Repository = "https://github.com/jbisaccia-9/lens-gate"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"lensgate.config" = ["*.yaml"]
+"lensgate.static" = ["*.html"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]

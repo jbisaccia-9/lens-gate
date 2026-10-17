@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{COMPANY}} · lens-gate</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f1c; --muted: #6b6f68; --line: #e2e0d8;
+    --accent: #2f5d50; --pass: #2f7a4d; --fail: #b23a2e; --skip: #8a8a8a; --chip: #eef0eb;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151714; --panel: #1d201c; --ink: #e8e8e3; --muted: #9a9e96; --line: #2e322c;
+            --accent: #7fb7a4; --pass: #6cc08d; --fail: #ef7b6e; --chip: #262a25; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); height: 100vh; display: grid;
+         grid-template-columns: minmax(0, 1fr) 420px; }
+  @media (max-width: 900px) { body { grid-template-columns: 1fr; grid-template-rows: 45vh 1fr; } }
+  .dash { border-right: 1px solid var(--line); overflow: auto; }
+  .dash iframe { width: 100%; height: 100%; border: 0; background: var(--panel); }
+  .offline { padding: 24px; }
+  .offline h2 { margin: 0 0 4px; font-size: 15px; }
+  .offline p.note { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .board { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .board h3 { margin: 0 0 2px; font-size: 14px; }
+  .board .coll { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .board li { font-size: 13px; margin: 3px 0; }
+  .chat { display: flex; flex-direction: column; background: var(--panel); min-height: 0; }
+  header { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  header b { font-size: 14px; } header span { color: var(--muted); font-size: 12px; display: block; }
+  .signin { padding: 10px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+  .signin input, .signin textarea { width: 100%; font: inherit; font-size: 12px; padding: 6px 8px;
+         border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+  .signin textarea { height: 46px; resize: vertical; font-family: ui-monospace, monospace; }
+  .log { flex: 1; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { font-size: 14px; line-height: 1.45; }
+  .msg.you { align-self: flex-end; background: var(--chip); padding: 8px 11px; border-radius: 10px; max-width: 85%; }
+  .msg.bot { border-left: 3px solid var(--accent); padding-left: 10px; }
+  .rules { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+  .rule { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; }
+  .rule.pass { color: var(--pass); } .rule.fail { color: var(--fail); } .rule.skip { color: var(--skip); }
+  .calls { margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .calls .refused { color: var(--fail); }
+  form { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+  form input { flex: 1; font: inherit; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px;
+               background: var(--bg); color: var(--ink); }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+</style>
+</head>
+<body>
+<section class="dash" id="dash"></section>
+<section class="chat">
+  <header><b>Ask the dashboards</b><span>Answers run as you. Every one is graded L1–L6 before you see it.</span></header>
+  <div class="signin" id="signin"></div>
+  <div class="log" id="log"></div>
+  <form id="ask"><input id="q" placeholder="e.g. Which stores had the most stockout days in September?" autocomplete="off"><button id="go">Ask</button></form>
+</section>
+<script>
+const MB = "{{METABASE_URL}}";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let token = "";
+try { token = sessionStorage.getItem("lg_token") || ""; } catch (e) {}
+
+function renderSignin() {
+  const live = !!MB;
+  $("signin").innerHTML =
+    (live ? `<input id="em" placeholder="Metabase email"><input id="pw" type="password" placeholder="Metabase password">` : "") +
+    `<textarea id="tok" placeholder="ID token (offline: python -m lensgate token data avery.lin@larkmoor.example)">${esc(token)}</textarea>` +
+    `<button id="save">${live ? "Sign in" : "Use token"}</button>`;
+  $("save").onclick = async () => {
+    token = $("tok").value.trim();
+    try { sessionStorage.setItem("lg_token", token); } catch (e) {}
+    if (live) {
+      const r = await fetch("/api/login", {method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({email: $("em").value, password: $("pw").value})});
+      add("bot", r.ok ? "Signed in to Metabase as you." : (await r.json()).error);
+    } else { add("bot", "Token set."); }
+  };
+}
+
+async function renderDash() {
+  if (MB) { $("dash").innerHTML = `<iframe src="${esc(MB)}" title="Metabase"></iframe>`; return; }
+  const r = await (await fetch("/api/dashboards")).json();
+  $("dash").innerHTML = `<div class="offline"><h2>Dashboards (offline)</h2>
+    <p class="note">Run the docker compose stack and <code>serve --metabase</code> to see live Metabase here.</p>` +
+    Object.entries(r.dashboards).map(([name, d]) => `<div class="board"><h3>${esc(name)}</h3>
+      <div class="coll">${esc(d.collection)}</div><ul>${d.cards.map(c => `<li>${esc(c)}</li>`).join("")}</ul></div>`).join("") + `</div>`;
+}
+
+function add(who, html) {
+  const el = document.createElement("div");
+  el.className = "msg " + who;
+  el.innerHTML = html;
+  $("log").appendChild(el);
+  $("log").scrollTop = 1e9;
+  return el;
+}
+
+$("ask").onsubmit = async (e) => {
+  e.preventDefault();
+  const q = $("q").value.trim();
+  if (!q) return;
+  add("you", esc(q));
+  $("q").value = ""; $("go").disabled = true;
+  const pending = add("bot", "<i>Working…</i>");
+  try {
+    const r = await fetch("/api/ask", {method: "POST", headers: {"Content-Type": "application/json", "Authorization": "Bearer " + token},
+      body: JSON.stringify({question: q})});
+    const j = await r.json();
+    if (!r.ok) { pending.innerHTML = esc(j.error); return; }
+    const rules = ["L1","L2","L3","L4","L5","L6"].map(k => {
+      const st = j.skipped.includes(k) ? "skip" : (j.rules[k] || "skip");
+      return `<span class="rule ${st}" title="${st}">${k}</span>`; }).join("");
+    const calls = j.calls.map(c => c.refused
+      ? `<div class="refused">✕ ${esc(c.tool)} → ${esc(c.target)}: ${esc(c.refused)}</div>`
+      : `<div>✓ ${esc(c.tool)} → ${esc(c.target)}</div>`).join("");
+    pending.innerHTML = `${esc(j.answer)}<div class="rules">${rules}</div><div class="calls">${calls}</div>`;
+  } catch (err) { pending.innerHTML = esc(String(err)); }
+  finally { $("go").disabled = false; }
+};
+
+renderSignin(); renderDash();
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+# lens-gate access policy for Larkmoor Goods (fictional).
+#
+# One file decides who sees what. Identity-provider groups map to roles; roles
+# grant Metabase *connections* (each one a separate warehouse login that can
+# only read its own schemas) and collections (where saved charts may live).
+#
+# Group ids are GUID-shaped because Entra ID emits group object ids, not names,
+# in the `groups` claim. These are obviously fake: 0000...-a1 through -a5.
+
+company: Larkmoor Goods
+
+identity:
+  issuer: https://login.dev-idp.example/lensgate/v2.0
+  audience: api://lens-gate
+  username_claim: preferred_username
+  groups_claim: groups
+
+# A connection is a Metabase database whose warehouse login is granted USAGE
+# and SELECT on these schemas and nothing else. `ref` (the store directory) is
+# shared so every domain can name stores without seeing another domain's facts.
+connections:
+  wh_sales:   [ref, sales]
+  wh_ops:     [ref, ops]
+  wh_people:  [ref, people]
+  wh_finance: [ref, finance]
+  wh_exec:    [ref, sales, ops, people, finance]
+
+roles:
+  store_lead:
+    metabase_group: Store Leads
+    idp_groups: [00000000-0000-4000-8000-0000000000a1]
+    connections: [wh_sales, wh_ops]
+    view: [Store Floor]
+    curate: [Store Floor/Sandbox]
+  regional_ops:
+    metabase_group: Regional Ops
+    idp_groups: [00000000-0000-4000-8000-0000000000a2]
+    connections: [wh_sales, wh_ops, wh_people]
+    view: [Store Floor]
+    curate: [Store Floor/Sandbox, Regional Ops]
+  finance:
+    metabase_group: Finance
+    idp_groups: [00000000-0000-4000-8000-0000000000a3]
+    connections: [wh_sales, wh_finance]
+    view: []
+    curate: [Finance]
+  executive:
+    metabase_group: Executive
+    idp_groups: [00000000-0000-4000-8000-0000000000a4]
+    connections: [wh_exec]
+    view: [Store Floor, Regional Ops, Finance]
+    curate: [Executive]
+
+# Collections, parent before child. `Store Floor/Sandbox` is where store leads
+# may save their own charts without touching the curated dashboard above it.
+collections:
+  - Store Floor
+  - Store Floor/Sandbox
+  - Regional Ops
+  - Finance
+  - Executive
+
+# Principals that may hold credentials but must never answer on anyone's
+# behalf. L2 refuses a turn executed under any of these, or under any
+# credential that is not the asking person's own session.
+service_principals: [svc-lens-broker, metabase-admin]

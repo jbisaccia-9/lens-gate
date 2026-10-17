@@ -1,0 +1,8 @@
+out/
+data/
+.lensgate/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.env
