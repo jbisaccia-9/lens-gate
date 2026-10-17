@@ -1,0 +1,33 @@
+name: live-stack
+# Manual only: boots Postgres + Metabase, provisions from policy.yaml, and runs
+# scripts/live_smoke.py against the real API. Slow (Metabase takes a minute or
+# two to start) and dependent on Metabase's API staying the shape it is today,
+# so it is not part of the gate that runs on every push.
+on: [workflow_dispatch]
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      LENSGATE_PG_SUPERUSER_PASSWORD: ci${{ github.run_id }}su
+      LENSGATE_PG_WH_SALES_PASSWORD: ci${{ github.run_id }}a
+      LENSGATE_PG_WH_OPS_PASSWORD: ci${{ github.run_id }}b
+      LENSGATE_PG_WH_PEOPLE_PASSWORD: ci${{ github.run_id }}c
+      LENSGATE_PG_WH_FINANCE_PASSWORD: ci${{ github.run_id }}d
+      LENSGATE_PG_WH_EXEC_PASSWORD: ci${{ github.run_id }}e
+      LENSGATE_MB_APPDB_PASSWORD: ci${{ github.run_id }}f
+      LENSGATE_MB_ADMIN_EMAIL: admin@larkmoor.example
+      LENSGATE_MB_ADMIN_PASSWORD: ci${{ github.run_id }}Admin1
+      LENSGATE_DEMO_PASSWORD: ci${{ github.run_id }}Demo1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -e ".[dev]"
+      - run: python -m lensgate seed data
+      - run: docker compose up -d
+      - run: python -m lensgate provision --metabase http://localhost:3000
+      - run: python -m lensgate sync data --metabase http://localhost:3000 --apply
+      - run: python scripts/live_smoke.py
+      - if: failure()
+        run: docker compose logs --tail 200 metabase

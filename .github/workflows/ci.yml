@@ -1,0 +1,58 @@
+name: ci
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+      # Happy path: five questions from four people through the real broker; every turn graded.
+      - run: python -m lensgate seed data
+      - run: python -m lensgate demo data --out out/run
+      - run: python -m lensgate check-dir out/run --data data
+      # The planted drift MUST be reported: sync exits non-zero until someone fixes it.
+      - run: "! python -m lensgate sync data"
+      # The refusal is the assertion: every counterexample MUST fail, each for its own rule.
+      - run: python -m lensgate counterexamples out/cx --data data
+      - run: "! python -m lensgate check-dir out/cx --data data"
+      # The warehouse grants are generated from policy.yaml; the compose file must parse.
+      - run: python -m lensgate ddl --roles | diff - docker/initdb/02-roles.sh
+      - name: compose config
+        run: |
+          for v in PG_SUPERUSER_PASSWORD PG_WH_SALES_PASSWORD PG_WH_OPS_PASSWORD PG_WH_PEOPLE_PASSWORD \
+                   PG_WH_FINANCE_PASSWORD PG_WH_EXEC_PASSWORD MB_APPDB_PASSWORD; do export LENSGATE_$v=ci; done
+          docker compose config -q
+
+  warehouse:
+    # The warehouse layer on real Postgres: the shipped init scripts load the seed,
+    # every shipped query returns exactly what the offline backend returns, and each
+    # connection's login reads its own schemas and nothing else.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: {POSTGRES_USER: lensgate, POSTGRES_PASSWORD: ci-superuser, POSTGRES_DB: postgres}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U lensgate" --health-interval 5s --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGPASSWORD: ci-superuser
+      POSTGRES_USER: lensgate
+      POSTGRES_DB: larkmoor
+      LENSGATE_PG_WH_SALES_PASSWORD: ciSales1
+      LENSGATE_PG_WH_OPS_PASSWORD: ciOps1
+      LENSGATE_PG_WH_PEOPLE_PASSWORD: ciPeople1
+      LENSGATE_PG_WH_FINANCE_PASSWORD: ciFinance1
+      LENSGATE_PG_WH_EXEC_PASSWORD: ciExec1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -e .
+      - run: python -m lensgate seed data
+      - run: python scripts/pg_check.py
