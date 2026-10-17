@@ -1,6 +1,6 @@
 # lens-gate
 
-[![ci](https://github.com/jbisaccia-9/lens-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/jbisaccia-9/lens-gate/actions/workflows/ci.yml) · [captured results](RESULTS.md)
+[![ci](https://github.com/jbisaccia-9/lens-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/jbisaccia-9/lens-gate/actions/workflows/ci.yml) · [live demo](https://jbisaccia-9.github.io/lens-gate/) · [captured results](RESULTS.md)
 
 **AI on the dashboards, running as the person who asked — and the gate that refuses any answer they couldn't have produced by hand, or that quotes a number no query returned.**
 
@@ -24,6 +24,18 @@ the store lead's finance question is refused before the query runs, 5
 dashboard writes land each as the person who asked, the planted access drift
 is reported, and 6/6 counterexamples are refused — each for exactly the rule
 in its name.**
+
+## Try it without installing anything
+
+The [live demo](https://jbisaccia-9.github.io/lens-gate/) lets you pick one of
+six people at Larkmoor Goods, see only the dashboards their access shows, and
+ask the demo questions as them: in-scope answers come back with all six checks,
+out-of-scope ones are refused with the gate's real reason, and a chart someone
+saves appears on their dashboard. It's a replay, not a live system —
+`scripts/build_site.py` runs every question as every person (30 turns) through
+the real broker and gate, plus the six counterexamples, and inlines the results
+into one static page. A test rebuilds it and fails if `docs/index.html` is stale,
+so the page can't drift from the code.
 
 ## Quickstart (offline — no Docker, no keys)
 
@@ -227,6 +239,7 @@ src/lensgate/
   counterexamples.py     the six turns that must be refused
   seed.py                the synthetic world, its DDL and its warehouse grants
 docker/initdb/           generated schema + per-connection grants (tests fail if they drift)
+scripts/build_site.py    the GitHub Pages replay: 30 real turns + the counterexamples -> docs/index.html
 scripts/pg_check.py      real Postgres: shipped SQL matches offline results; every login walled to its schemas
 scripts/live_smoke.py    against a provisioned stack: does Metabase itself enforce the policy?
 ```

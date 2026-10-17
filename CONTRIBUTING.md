@@ -13,7 +13,7 @@ Thanks for considering a contribution. This repo is part of a small family of "-
 
 1. Fork the repo and clone your fork.
 2. Follow the offline Quickstart in the README — no credentials or Docker needed.
-3. Run `pytest`, the demo, `check-dir` on the counterexamples, and `python scripts/make_results.py` before opening a PR.
+3. Run `pytest`, the demo, `check-dir` on the counterexamples, `python scripts/make_results.py` and `python scripts/build_site.py` before opening a PR (a test fails if `docs/index.html` is stale).
 4. Open a PR against `main`. Small, focused PRs are easier to review than large ones.
 
 ## Code of conduct

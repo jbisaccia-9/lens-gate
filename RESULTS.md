@@ -7,9 +7,9 @@ Generated 2026-10-17 by `scripts/make_results.py` - every block below is capture
 `python -m pytest -q` - exit 0, OK
 
 ```
-........................................................................ [ 97%]
-..                                                                       [100%]
-74 passed in 2.27s
+........................................................................ [ 93%]
+.....                                                                    [100%]
+77 passed in 5.66s
 ```
 
 ## Seed the synthetic world
@@ -27,32 +27,32 @@ seeded Larkmoor Goods (fictional): 12 stores, 27 weeks, 6 closed months
 `python -m lensgate demo data --out out/run` - exit 0, OK
 
 ```
-PASS  20261012T090500-1a72722d  avery.lin     delivered  (3 call(s) ran, 0 refused)
+PASS  20261012T090500-07bf3cf3  avery.lin     delivered  (3 call(s) ran, 0 refused)
       Q: How has weekly revenue by category trended over the last 8 weeks? Save it as a chart in
       my sandbox.
       A: Apparel led the last 8 weeks with 1,794,919.64 in revenue (+8.6% vs the 8 weeks
       before). Accessories was smallest at 723,596.10 (-0.2%). The biggest swing was Outdoor at
-      -17.2%. I saved the weekly chart to Store Floor / Sandbox.
-PASS  20261012T092000-e71b69f6  marisol.tate  delivered  (1 call(s) ran, 0 refused)
+      -17.2%. I saved the chart to Store Floor / Sandbox.
+PASS  20261012T092000-ec470205  marisol.tate  delivered  (1 call(s) ran, 0 refused)
       Q: Which stores had the most stockout days in September?
       A: Most stockout days in September: Copper Ridge (Highlands) with 47, then Saltmarsh
       (Coastal) with 43, then Stonegate (Highlands) with 15.
-PASS  20261012T100200-afbba2f5  devin.okafor  delivered  (3 call(s) ran, 0 refused)
+PASS  20261012T100200-dc561455  devin.okafor  delivered  (3 call(s) ran, 0 refused)
       Q: What was operating margin by region in Q3? Add it to the Finance Monthly dashboard.
       A: Q3 operating margin by region: Coastal 15.5% on 3,253,524.32 revenue; Valley 14.9% on
-      3,386,892.46 revenue; Highlands 13.9% on 2,845,194.57 revenue. The chart is now on Finance
+      3,386,892.46 revenue; Highlands 13.9% on 2,845,194.57 revenue. It's now on Finance
       Monthly.
-PASS  20261012T103000-30059501  priya.raman   delivered  (3 call(s) ran, 0 refused)
+PASS  20261012T103000-e8992b82  priya.raman   delivered  (3 call(s) ran, 0 refused)
       Q: Put a monthly revenue vs labor cost chart on the Executive Overview, and tell me how
       labor as a share of revenue moved from April to September.
       A: Labor ran 15.4% of revenue in 2026-04 and 15.2% in 2026-09 (labor cost 430,446.41 vs
-      441,106.89). The chart is on the Executive Overview.
-PASS  20261012T111500-2f0a9263  avery.lin     delivered, 1 call(s) refused  (0 call(s) ran, 1 refused)
+      441,106.89). It's now on the Executive Overview.
+PASS  20261012T111500-50a4a761  avery.lin     delivered, 1 call(s) refused  (0 call(s) ran, 1 refused)
       Q: What was operating income by store last quarter?
       refused: L3: connection wh_finance is not granted to store_lead (has ['wh_ops',
       'wh_sales'])
-      A: I can't show that: operating income is finance data, and your role doesn't include it.
-      A finance partner can share it, or an admin can review your access.
+      A: I can't answer that: it needs finance data, and your role doesn't include it. If you
+      think it should, ask an admin to review your access.
 
 5 turns: 4 answered in full, 1 declined in scope (the out-of-scope query never ran), 0 withheld. 5 Metabase write(s), each as the person who asked:
   save_question     Weekly revenue by category, last 8 weeks  ->  Store Floor/Sandbox  (by avery.lin)
@@ -67,11 +67,11 @@ PASS  20261012T111500-2f0a9263  avery.lin     delivered, 1 call(s) refused  (0 c
 `python -m lensgate check-dir out/run --data data` - exit 0, OK
 
 ```
-PASS  20261012T090500-1a72722d
-PASS  20261012T092000-e71b69f6
-PASS  20261012T100200-afbba2f5
-PASS  20261012T103000-30059501
-PASS  20261012T111500-2f0a9263
+PASS  20261012T090500-07bf3cf3
+PASS  20261012T092000-ec470205
+PASS  20261012T100200-dc561455
+PASS  20261012T103000-e8992b82
+PASS  20261012T111500-50a4a761
 
 5/5 passed
 ```
