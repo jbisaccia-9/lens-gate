@@ -1,0 +1,64 @@
+# lens-gate live stack: a Postgres warehouse, Metabase, and Metabase's own app DB.
+# Everything binds to 127.0.0.1. Nothing here phones home: Metabase's anonymous
+# tracking and update checks are off. (What an AI client does with query results
+# is a separate question - see "Where data goes" in the README.)
+#
+#   python -m lensgate seed data      # must run first: the warehouse loads ./data on first start
+#   cp .env.example .env              # then fill in every value
+#   docker compose up -d
+
+services:
+  warehouse:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: larkmoor
+      POSTGRES_USER: ${LENSGATE_PG_SUPERUSER:-lensgate}
+      POSTGRES_PASSWORD: ${LENSGATE_PG_SUPERUSER_PASSWORD:?set in .env}
+      LENSGATE_PG_WH_SALES_PASSWORD: ${LENSGATE_PG_WH_SALES_PASSWORD:?set in .env}
+      LENSGATE_PG_WH_OPS_PASSWORD: ${LENSGATE_PG_WH_OPS_PASSWORD:?set in .env}
+      LENSGATE_PG_WH_PEOPLE_PASSWORD: ${LENSGATE_PG_WH_PEOPLE_PASSWORD:?set in .env}
+      LENSGATE_PG_WH_FINANCE_PASSWORD: ${LENSGATE_PG_WH_FINANCE_PASSWORD:?set in .env}
+      LENSGATE_PG_WH_EXEC_PASSWORD: ${LENSGATE_PG_WH_EXEC_PASSWORD:?set in .env}
+    volumes:
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+      - ./data/warehouse:/seed:ro
+      - warehouse:/var/lib/postgresql/data
+    ports: ["127.0.0.1:5433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d larkmoor"]
+      interval: 5s
+      retries: 20
+
+  metabase-appdb:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: metabase
+      POSTGRES_USER: metabase
+      POSTGRES_PASSWORD: ${LENSGATE_MB_APPDB_PASSWORD:?set in .env}
+    volumes:
+      - metabase-appdb:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metabase -d metabase"]
+      interval: 5s
+      retries: 20
+
+  metabase:
+    image: metabase/metabase:${LENSGATE_MB_VERSION:-v0.64.1}
+    depends_on:
+      warehouse: {condition: service_healthy}
+      metabase-appdb: {condition: service_healthy}
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: metabase-appdb
+      MB_DB_PORT: 5432
+      MB_DB_DBNAME: metabase
+      MB_DB_USER: metabase
+      MB_DB_PASS: ${LENSGATE_MB_APPDB_PASSWORD:?set in .env}
+      MB_ANON_TRACKING_ENABLED: "false"
+      MB_CHECK_FOR_UPDATES: "false"
+      MB_SITE_NAME: Larkmoor Goods
+    ports: ["127.0.0.1:3000:3000"]
+
+volumes:
+  warehouse:
+  metabase-appdb:
