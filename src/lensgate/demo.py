@@ -24,6 +24,31 @@ def pct(v) -> str:
 
 
 # ---- plans ----------------------------------------------------------------
+#
+# Each plan reads with a connection the person actually holds (the narrowest
+# one that covers the schemas it needs, as a sensible model would), and says
+# so plainly when a read, save or pin is refused. Nothing claims a chart was
+# saved unless the save returned ok.
+
+def pick(t, schemas: set[str], default: str) -> str:
+    """The narrowest granted connection whose schemas cover `schemas`; else `default` (which will be refused)."""
+    granted = t.list_tables()["connections"]
+    fits = [c for c in granted if schemas <= t.policy.schemas_for(c)]
+    return min(fits, key=lambda c: (len(t.policy.schemas_for(c)), c)) if fits else default
+
+
+def no_access(domain: str) -> str:
+    return (f"I can't answer that: it needs {domain} data, and your role doesn't include it. "
+            "If you think it should, ask an admin to review your access.")
+
+
+def saved(r: dict, where: str) -> str:
+    return f"I saved the chart to {where}." if r.get("ok") else f"I couldn't save the chart to {where}: your role can't edit it."
+
+
+def pinned(r: dict, where: str) -> str:
+    return f"It's now on {where}." if r.get("ok") else f"I couldn't add it to {where}: your role can't edit that dashboard."
+
 
 Q_TREND = "How has weekly revenue by category trended over the last 8 weeks? Save it as a chart in my sandbox."
 TREND_SQL = """SELECT w.week_start, w.category, ROUND(SUM(w.revenue), 2) AS revenue
@@ -44,15 +69,16 @@ ORDER BY last_8_weeks DESC"""
 
 
 def plan_trend(t) -> str:
-    t.list_tables()
-    t.run_sql("wh_sales", TREND_SQL)
-    s = t.run_sql("wh_sales", TREND_SUMMARY_SQL)["rows"]
-    t.save_question("Store Floor/Sandbox", "Weekly revenue by category, last 8 weeks", "wh_sales", TREND_SQL, "line")
+    conn = pick(t, {"sales"}, "wh_sales")
+    if "rows" not in t.run_sql(conn, TREND_SQL):
+        return no_access("sales")
+    s = t.run_sql(conn, TREND_SUMMARY_SQL)["rows"]
+    r = t.save_question("Store Floor/Sandbox", "Weekly revenue by category, last 8 weeks", conn, TREND_SQL, "line")
     top, low = s[0], s[-1]
     mover = max(s, key=lambda r: abs(r[3]))
     return (f"{top[0]} led the last 8 weeks with {money(top[1])} in revenue ({pct(top[3])} vs the 8 weeks before). "
             f"{low[0]} was smallest at {money(low[1])} ({pct(low[3])}). The biggest swing was {mover[0]} at {pct(mover[3])}. "
-            "I saved the weekly chart to Store Floor / Sandbox.")
+            + saved(r, "Store Floor / Sandbox"))
 
 
 Q_STOCKOUTS = "Which stores had the most stockout days in September?"
@@ -65,9 +91,10 @@ LIMIT 3"""
 
 
 def plan_stockouts(t) -> str:
-    t.list_tables()
-    r = t.run_sql("wh_ops", STOCKOUT_SQL)["rows"]
-    parts = [f"{name} ({region}) with {days}" for name, region, days in r]
+    r = t.run_sql(pick(t, {"ops"}, "wh_ops"), STOCKOUT_SQL)
+    if "rows" not in r:
+        return no_access("inventory")
+    parts = [f"{name} ({region}) with {days}" for name, region, days in r["rows"]]
     return f"Most stockout days in September: {parts[0]}, then {parts[1]}, then {parts[2]}."
 
 
@@ -82,12 +109,15 @@ ORDER BY operating_margin_pct DESC"""
 
 
 def plan_margin(t) -> str:
-    t.list_tables()
-    r = t.run_sql("wh_finance", MARGIN_SQL)["rows"]
-    t.save_question("Finance", "Q3 operating margin by region", "wh_finance", MARGIN_SQL, "bar")
-    t.add_to_dashboard("Finance Monthly", "Q3 operating margin by region")
-    lines = "; ".join(f"{reg} {m}% on {money(rev)} revenue" for reg, rev, _oi, m in r)
-    return f"Q3 operating margin by region: {lines}. The chart is now on Finance Monthly."
+    conn = pick(t, {"finance"}, "wh_finance")
+    r = t.run_sql(conn, MARGIN_SQL)
+    if "rows" not in r:
+        return no_access("finance")
+    s = t.save_question("Finance", "Q3 operating margin by region", conn, MARGIN_SQL, "bar")
+    lines = "; ".join(f"{reg} {m}% on {money(rev)} revenue" for reg, rev, _oi, m in r["rows"])
+    tail = pinned(t.add_to_dashboard("Finance Monthly", "Q3 operating margin by region"), "Finance Monthly") \
+        if s.get("ok") else saved(s, "Finance")
+    return f"Q3 operating margin by region: {lines}. {tail}"
 
 
 Q_LABOR = ("Put a monthly revenue vs labor cost chart on the Executive Overview, and tell me how labor "
@@ -100,13 +130,16 @@ ORDER BY p.month"""
 
 
 def plan_labor(t) -> str:
-    t.list_tables()
-    r = t.run_sql("wh_exec", LABOR_SQL)["rows"]
-    t.save_question("Executive", "Monthly revenue vs labor cost", "wh_exec", LABOR_SQL, "line")
-    t.add_to_dashboard("Executive Overview", "Monthly revenue vs labor cost")
-    first, last = r[0], r[-1]
+    conn = pick(t, {"finance"}, "wh_exec")
+    r = t.run_sql(conn, LABOR_SQL)
+    if "rows" not in r:
+        return no_access("finance")
+    s = t.save_question("Executive", "Monthly revenue vs labor cost", conn, LABOR_SQL, "line")
+    first, last = r["rows"][0], r["rows"][-1]
+    tail = pinned(t.add_to_dashboard("Executive Overview", "Monthly revenue vs labor cost"), "the Executive Overview") \
+        if s.get("ok") else saved(s, "Executive")
     return (f"Labor ran {first[3]}% of revenue in {first[0]} and {last[3]}% in {last[0]} "
-            f"(labor cost {money(first[2])} vs {money(last[2])}). The chart is on the Executive Overview.")
+            f"(labor cost {money(first[2])} vs {money(last[2])}). {tail}")
 
 
 Q_OPINC = "What was operating income by store last quarter?"
@@ -117,12 +150,10 @@ GROUP BY st.store_name ORDER BY operating_income DESC"""
 
 
 def plan_opinc(t) -> str:
-    t.list_tables()
-    r = t.run_sql("wh_finance", OPINC_SQL)
-    if "refused" in r or "error" in r:
-        return ("I can't show that: operating income is finance data, and your role doesn't include it. "
-                "A finance partner can share it, or an admin can review your access.")
-    return "Operating income by store: " + "; ".join(f"{n} {money(v)}" for n, v in r["rows"])
+    r = t.run_sql(pick(t, {"finance"}, "wh_finance"), OPINC_SQL)
+    if "rows" not in r:
+        return no_access("finance")
+    return "Operating income by store: " + "; ".join(f"{n} {money(v)}" for n, v in r["rows"]) + "."
 
 
 PLANS = {Q_TREND: plan_trend, Q_STOCKOUTS: plan_stockouts, Q_MARGIN: plan_margin, Q_LABOR: plan_labor, Q_OPINC: plan_opinc}

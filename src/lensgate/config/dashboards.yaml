@@ -7,16 +7,16 @@ dashboards:
   - name: Store Floor
     collection: Store Floor
     cards:
-      - name: Weekly revenue by store
+      - name: Weekly revenue by region
         connection: wh_sales
         display: line
         sql: |
-          SELECT w.week_start, st.store_name, ROUND(SUM(w.revenue), 2) AS revenue
+          SELECT w.week_start, st.region, ROUND(SUM(w.revenue), 2) AS revenue
           FROM sales.weekly_sales w JOIN ref.stores st ON st.store_id = w.store_id
-          GROUP BY w.week_start, st.store_name ORDER BY w.week_start, st.store_name
+          GROUP BY w.week_start, st.region ORDER BY w.week_start, st.region
       - name: Category mix, last 4 weeks
         connection: wh_sales
-        display: pie
+        display: bar
         sql: |
           SELECT w.category, ROUND(SUM(w.revenue), 2) AS revenue
           FROM sales.weekly_sales w WHERE w.week_start >= '2026-09-14'
